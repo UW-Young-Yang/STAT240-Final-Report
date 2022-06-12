@@ -1,0 +1,264 @@
+---
+title: "Suicide Report"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning=FALSE, message=FALSE)
+library(tidyverse)
+library(scales)
+library(countrycode) # continent
+library(rworldmap) # quick country-level heat maps
+```
+
+# Introduction: 
+
+With COVID-19 still remaining severe around the globe, many people are living an insecure and difficult life that is completely different from their past life. One example is students are attending school remotely which is more difficult to persist in studying. It adds a great amount of mental stress for all affected people. A consequence of painful stress is committing suicide. Because suicide for every age group is heavy, engaging in a conversation and research about suicide rates with other factors can be valuable and applicable.
+This report analyzes the possible associated factors like GDP with suicide rates to uncover some insights, look for notable patterns, and open possibilities for suicide preventions. In an examination of factors affecting suicide, we will show that Gdp per capita is not the crucial factor whereas age and gender associate with the suicide rate. Higher age and male will lead to higher suicide rates.
+
+
+# Background
+
+### Variable meanings:
+We renamed several variable names and all variable names and their meaning can be found below.
+
+(@) country                ~ The country suicides happened. 
+(@) year                   ~ The year suicides happened.
+(@) sex                    ~ The sex, male or female.
+(@) age                    ~ The range of age suicide falls.
+(@) suicide_number         ~ The number of suicide cases happened
+(@) population             ~ The population of the country
+(@) country_year           ~ The country name concatenated with the year
+(@) suicides_per_100k      ~ The amount of suicides every 100k of the population
+(@) HDI for year           ~ The HDI index of the country on a yearly basis
+(@) gdp_per_year           ~ GDP of the country on a yearly basis
+(@) gdp_per_capita         ~ GDP of the country on a capita basis
+(@) generation             ~ Generation based on the age group
+
+### Dataset
+The data set is collected from Kaggle.
+Link: https://www.kaggle.com/russellyates88/suicide-rates-overview-1985-to-2016
+
+Rusty. _"Suicide rates Overview 1985 to 2016."_ Kaggle, December 01. 2018, Retrieved April 10, 2021, from https://www.kaggle.com/russellyates88/suicide-rates-overview-1985-to-2016.
+
+### Background Information
+One background information that can help readers is HDI, which represents the human development index. It can be summarized as a term for human development within a certain country. Generally, higher HDI means a more developed country such as better education and better living conditions. We may use this in later analysis.
+ 
+### Unusual Factor to be aware of:
+One main downside of this data is the irregularity. Based on the rows of provided data, the year is inconsistent. There could be missing data for a certain year for a specific country. The reason behind this is unclear. Our assumption is some countries is lack proper technology so there are no data available. It can also due to a large population like China so it becomes hard to calculate. We believe that could indirectly affect the accuracy of the result. 
+
+### Our Focus:
+Our main goal for the rest of the report would be to analyze the relationship between suicide rate and corresponding factors such as age, sex, and GDP per capita. We also take a closer look at the data for the USA which both makes a comparison with the globe and gives more insights into the country where we are living now.
+We will only use the data points only from the year 2008. Because first, we have not yet learned how to deal with time-dependent data. Second, the year 2008 has about 1000 observations which can be statistically important. **Also for the suicide rate, we will take the mean from suicides per 100k as the suicide rate for all analysis cases.**
+
+
+```{r, echo=FALSE}
+suicide <- read.csv("../data/Suicide-Rates.csv") %>%
+  filter(year == "2008")%>%
+  mutate(age = case_when(
+    age == "5-14 years" ~ "05-14 years",
+    TRUE ~ age
+  )) %>%
+  rename(suicide_number= "suicides_no",
+         suicides_per_100k = "suicides.100k.pop",
+         gdp_per_capita = "gdp_per_capita....",
+         gdp_for_year = "gdp_for_year....",
+         country_year = country.year)
+usa <- suicide %>%
+  filter(country == "United States")
+```
+  
+```{r, include=FALSE}
+country <- suicide %>%
+  group_by(country) %>%
+  summarize(suicides_per_100k = mean(suicides_per_100k))%>%
+  arrange(suicides_per_100k)
+countrydata <- joinCountryData2Map(country, joinCode = "NAME", nameJoinColumn = "country")
+par(mar=c(0, 0, 0, 0)) # margins
+```
+  
+```{r map, echo=FALSE}
+mapCountryData(countrydata, 
+nameColumnToPlot="suicides_per_100k", 
+mapTitle="Suicides Per 100K in Countries in 2008", 
+colourPalette = "heat", 
+oceanCol="lightblue", 
+missingCountryCol="grey65",
+catMethod = "pretty")
+```
+
+This is a world map showing the where suicides per 100k people coming from in different countries and to what extent they are. Here are many countries that we collected data from which are colored and countries that have no data are colored grey.
+
+### Does a person's wealth associated with lower suicide rate?
+Our first question is will more wealth lead to a lower suicide rate. Some of the common causes for suicide are unemployment, financial problems related to their livelihood which means low wealth. In order to quantify people's wealth, we use GDP per capita. Our assumption is high GDP per capita means more consumption capacity so that they can afford more necessities and solve some financial problems which then lower the suicide rate. 
+
+```{r gdp, echo=FALSE}
+fit = lm(suicides_per_100k ~ gdp_per_capita, data=suicide)
+gdp <- suicide %>%
+  group_by(gdp_per_capita, year) %>%
+  summarize(suicide_rate=mean(suicides_per_100k))
+
+gdp %>%
+  ggplot(aes(x=gdp_per_capita, y=suicide_rate)) +
+  geom_point(alpha=0.2) +
+  geom_smooth(se=FALSE) +
+  geom_abline(aes(slope = coef(fit)[2] , intercept = coef(fit)[1]), color="red")+
+  scale_x_continuous(label = label_comma()) + 
+  scale_x_log10()+
+  xlab("Gdp Per Capita") +
+  ylab("Suicide Rate(Suicides Per 100k(Log10))") +
+  ggtitle("The comparison between Suicide Rate and GDP per capita in the World in 2008")
+```
+  
+We plot GDP per capita with suicide per a hundred thousand people using scatter plot. 
+From the graph, the overall trend line first increases then decreases. The slope of the trend line is nearly 0 accounting for all years’ data.
+We also predict a linear line to model its trend which is the red line in the above plot. It is showing a slope that is almost zero. We pulled out the exact statistics for slope and intercept. 
+```{r linear regression, echo=FALSE}
+coef(fit)
+```
+So our model line can be shown as 
+$$
+Suicides\_Per\_100K =  -0.0000166 * GDP\_Per\_Capita + 12.35
+$$
+
+>From the trend line, a 1 USD of increase in GDP (per capita) was associated with -0.0000166 additional suicide, per 100k people in 2008.
+>Linear regression is also applied and it shows our slope is close to 0. With a person 0 GDP per capita, suicides per 100k can reach to 12.35 cases. 
+>Another application is we can apply such equation to estimate suicide rates for other countries that are not collected so that we can predict their future suicide for references.
+For example, China has 10261 USD in 2019 for GDP per Capita which we can know their suicides per 100k is about 12.33. From doing this, we can give a better analysis.
+
+
+And we can also calculate the correlation coefficient to show that suicide per 100k has little relationship with GDP per capita.
+```{r echo=FALSE}
+fit = lm(suicides_per_100k ~ gdp_per_capita, data=suicide)
+cor(suicide$gdp_per_capita,suicide$suicides_per_100k)
+```
+
+
+#### **Can we use hypothesis testing to test if this linear regression is true?**####
+
+$$
+H_0: Slope_{GDP\_Per\_Capita} = 0 \\
+H_a: Slope_{GDP\_Per\_Capita} \neq 0
+$$
+Then we used the summary from linear model to see the p-value
+```{r echo=FALSE}
+model <- lm(suicides_per_100k ~ gdp_per_capita, data = suicide)
+summary(model)
+```
+With the p-value bigger than 0.05, we fail to reject the null hypothesis that the slope is equal to zero. And from the plots, we also show that the slope of GDP per capita is equal to zero. Therefore, it means the GDP per capita is not associated with the suicide rate.
+The R-squared is close to 0 which means GDP per capita explains very little of the variance in suicide rate overall.
+
+##### **Therefore, the following conclusion will be made: **
+  
+>There is no association between GDP per capita and suicides per 100k population. Even though the equation shows a weak increasing trend, the p-value, and R-squared indicate there is no association between them from our data. Our origin assumption that higher GDP per capita means lower suicide rate is incorrect. Therefore, we speculate that GDP per capita may not be an indicator directly related to the core causes of suicide, so we continue to analyze age and gender.
+
+>Another application is we can apply such equation to estimate other countries' suicide rates so that we can predict their future suicide for references.
+
+
+
+### Do different age groups have different suicide rates?
+Another main cause of suicide is mental stress. It can vary from patients trying a variety of psychiatric drugs or therapies to deal with illness to youth face heavy workload or study. So Our deduction is the suicide rates will become higher when a person ages. If a person is older, he simply needs to face more pressure such as family issues and problems related to work like communicating with tough clients or getting criticized for his/her bad performance. More severely, oldness means more illness. Trying therapies to just extend his/her life but with continuous pain from incurable illness is insufferable. Therefore, we want to test if age groups have different suicide rates just as expected.
+
+```{r, echo=FALSE}
+age <- suicide %>%
+  group_by(age) %>%
+  summarize(suicide_rate=suicides_per_100k, median_suicide_rate=median(suicide_rate))
+
+p1<- age %>%
+  ggplot(aes(x=reorder(age, median_suicide_rate), y=suicide_rate,color = age)) +
+  geom_boxplot() +
+  xlab("Age") +
+  ylab("Suicide Rate(Log10)") +
+  scale_y_log10()+
+  ggtitle("The comparison between Suicide Rate among age groups in the World in 2008")
+p1
+```
+  
+From the data above, we notice that the median of suicide rates is different among different age groups. The median suicide rate rises when the age group is older.
+
+
+#### **Is this conclusion viable?**####
+We want to test if the mu, the mean of suicide rate in population, in different age groups are different, so we run a one-way ANOVA test. 
+$$
+H_0: μ_{05-14} = μ_{15-24}= μ_{25-34}= μ_{55-74}= μ_{35-54}=μ_{75+} \\
+H_a: μ_{05-14} \neq μ_{15-24}\neq μ_{25-34}\neq μ_{55-74}\neq μ_{35-54}\neqμ_{75+} \\
+$$
+
+```{r echo =FALSE}
+age_aov <- aov(suicide_rate ~ age, data = age)
+summary(age_aov)
+```
+So from the above result, we can know p_value is smaller than 0.05 so that we reject the null hypothesis and we have strong evidence that the mean of different age groups is different. Age does affect the suicide rate. From the plot, we can know as age grows, people are more likely to have a higher suicide rate.
+
+But the standard deviation among different groups differs dramatically. The plot below shows the standard deviation of each age group. 
+```{r echo=FALSE}
+age%>%
+  group_by(age)%>%
+  summarise(sd(suicide_rate))
+```
+We will leave this in the discussion.
+
+##### **Therefore, the following conclusion will be made: **
+>From ANOVA test and plots, we can see that different age groups have different suicide rates. As age increases, the suicide rate becomes higher.
+
+### Analysis for Gender VS Suicide Rate:
+Gender can also affect the suicide rate. Females tend to have more traumatic experiences as growing up, such as sexual abuse. Therefore they may have a higher suicide than males. This is what we want to test on.
+
+```{r gender, echo=FALSE}
+gender <- suicide %>%
+  group_by(sex) %>%
+  summarize(suicide_rate=mean(suicides_per_100k))
+
+gender %>%
+  ggplot(aes(x=sex, y=suicide_rate,fill = sex)) +
+  geom_col() +
+  ylab("Suicide Rate") +
+  ggtitle("The comparison between Suicide Rate among gender in the World in 2008")
+```
+  
+From the analysis, we witness an approximate 5% suicide rate for all females around the globe and an approximate 20% suicide rate for all males around the globe.
+
+#### **Is this conclusion viable?**####
+We conduct a t-test to test if the true difference between the mean of females suicide rate and males suicide rate is not equal to zero as we see in the plots.
+$$
+H_0: μ_{diff} = 0 \\
+H_a: μ_{diff} \neq 0 \\
+$$
+```{r echo=FALSE}
+gender2 <- suicide %>%
+  group_by(sex)%>%
+  select(sex,suicides_per_100k)
+t.test(gender2$suicides_per_100k[which(gender2$sex == "male")],gender2$suicides_per_100k[which(gender2$sex == "female")])
+```
+So with the p-value smaller than 0.05, we reject the null hypothesis that the true difference in means between males and females is equal to zero. There is strong evidence that the true difference in means between males and females is not equal to zero. So and from the plots, we have strong evidence that the male suicide rate is higher than that of females.
+
+##### **Therefore, the following conclusion can be made: ** #####
+>The suicide rate is different for males and females and the suicide rate of males is about 4 times higher as much as the suicide rate of females in the whole world in 2008.
+  
+# Discussion: 
+>From our analysis, we noticed that there is no direct association between the GDP per capita and the suicide rate. Our origin assumption that higher GDP per capita means lower suicide rate is incorrect. The R squared also showed little association between those two.
+
+>With that, we dived deeper into the age group with the suicide rate. Our plots proved our assumption that the suicide rate varies in different age groups. Older people tend to have a higher suicide rate globally. Furthermore, the age group of 75+ has the highest suicide rate. Our suggestion will be to take care of old people in your family as they may suffer from many problems and illness from oldness. Also, taking care of your own mental health is critical for all ages in the United States as all groups seem to be affected. However, the standard deviation for each age group differs dramatically which indicates a one-way ANOVA test is not suitable in this analysis. 
+
+>Finally, we found out that males have a higher suicide rate than females. The suicide rate is different for males and females and the suicide rate of males is about 4 times as much as the suicide rate of females in the whole world. Based on our findings, we can conclude that countries should be warier of males with age group above 75+ in lowering their suicide rate. Studies show that males tend to pick more violent suicide methods such as gunshot while females tend to try less violent ways like taking pills. Since gunshots are more lethal than pills, males are more likely to have a higher suicide rate and lower survival rate.
+ 
+>There are some potential shortcomings in our analysis. First, we only used data in 2008. There might be some uncovered differences and patterns in other years. The second is the lack of global coverage. Based on the data that we are utilizing, the data itself did not cover every country around the globe. Some data from countries with a huge population such as China are missing and we think it would definitely impact our findings in this study. Third, there are no specific reasons being stated behind all the suicides committed in the dataset. We are not able to analyze the reasons behind every committed suicide. Knowing the reasons would definitely help us in obtaining a more detailed analysis that would help in getting a more complete answer for our hypothesis. From the origin source, we cannot know why there are some countries not collected or included in the dataset. These countries may not cooperate with the data collection.
+ 
+>Our dataset only records the suicide rate from 1986 to 2016, it would be interesting to know the difference in suicide rate between pre-covid and post-covid. Of course, we would need more up-to-date data to measure the difference and find the impact of covid on the suicide rate. We have already had the measurement of economic factors, genders, and age group on suicide rate but having a plague factor such as the covid would definitely help us re-evaluate the significance of plague on humankind.  
+ 
+>All in all, from our data and analysis, we found that gender and age-group are the factors that influence the suicide rate and GDP per capita does not associate with the suicide rate. Countries that are associated with a high ratio of males and a high proportion of age-group above 75+ would definitely face a higher suicide rate. We think knowing this is crucial in dealing with the core of the problem. More priorities and assistance must be given to those countries with the above’s characteristics to make sure the global suicide rate is controlled in the future. 
+
+# Reference:
+Rusty. _"Suicide rates Overview 1985 to 2016."_ Kaggle, December 01. 2018, Retrieved April 10, 2021, from https://www.kaggle.com/russellyates88/suicide-rates-overview-1985-to-2016.
+
+
+
+
+
+
+
+
+
+
+
+
